@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: #0f172a;
+  background: linear-gradient(180deg, #e2e8f0 0%, #f8fafc 45%, #f1f5f9 100%);
+}
+
+.dark body {
+  color: #e2e8f0;
+  background: radial-gradient(1200px 600px at 50% -10%, #1e293b 0%, #0f172a 45%, #020617 100%);
+}
