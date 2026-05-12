@@ -7,4 +7,9 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: process.env.NODE_ENV === 'production' ? '/plotmapper/' : '/',
   plugins: [react(), tailwindcss()],
+  /** GitHub Pages: Settings → Pages → branch `main`, folder `/docs` (no Actions). */
+  build: {
+    outDir: 'docs',
+    emptyOutDir: true,
+  },
 })
