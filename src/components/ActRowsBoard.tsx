@@ -242,7 +242,7 @@ function GridCard({
             draggable={false}
             className="min-w-0 flex-1 cursor-default rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-right font-mono text-[0.85em] text-slate-800 tabular-nums outline-none dark:border-white/8 dark:bg-black/20 dark:text-slate-300"
             value={targetWordCount > 0 ? milestoneWords.toLocaleString() : '—'}
-            title="Approximate cumulative draft length by this beat (three-act pacing guide)"
+            title="Approximate cumulative draft length by this card’s position on the board (all act rows, reading order)"
           />
           <span className="shrink-0 text-[0.65em] text-slate-500 dark:text-slate-500">w</span>
         </div>
