@@ -52,6 +52,99 @@ export async function saveProjectJson(json: string, suggestedName: string): Prom
   URL.revokeObjectURL(a.href)
 }
 
+const OPEN_JSON_ACCEPT: Record<string, string[]> = { 'application/json': ['.json'] }
+
+/** Pick a JSON file; uses File System Access API when available. */
+export async function pickProjectJsonFile(): Promise<File | null> {
+  const w = window as Window & {
+    showOpenFilePicker?: (options: {
+      multiple?: boolean
+      types?: { description: string; accept: Record<string, string[]> }[]
+    }) => Promise<FileSystemFileHandle[]>
+  }
+
+  if (typeof w.showOpenFilePicker === 'function') {
+    try {
+      const [handle] = await w.showOpenFilePicker({
+        multiple: false,
+        types: [{ description: 'Plotmapper', accept: OPEN_JSON_ACCEPT }],
+      })
+      return await handle.getFile()
+    } catch (e) {
+      if ((e as { name?: string }).name === 'AbortError') return null
+      console.warn('plotmapper: showOpenFilePicker failed, using file input', e)
+    }
+  }
+
+  return await pickProjectJsonFileLegacyInput()
+}
+
+function pickProjectJsonFileLegacyInput(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'application/json,.json'
+    let settled = false
+    const finish = (file: File | null) => {
+      if (settled) return
+      settled = true
+      resolve(file)
+    }
+    input.addEventListener('change', () => finish(input.files?.[0] ?? null))
+    window.addEventListener(
+      'focus',
+      () => {
+        setTimeout(() => {
+          if (!input.files?.length) finish(null)
+        }, 480)
+      },
+      { once: true },
+    )
+    input.click()
+  })
+}
+
+export function parsePlotmapperSaveV1(
+  text: string,
+): { ok: true; data: PlotmapperSaveV1 } | { ok: false; error: string } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ok: false, error: 'This file is not valid JSON.' }
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'The file must contain a JSON object.' }
+  }
+  const o = parsed as Record<string, unknown>
+  if (o.version !== 1) {
+    return { ok: false, error: 'This file is not a Plotmapper save (expected "version": 1).' }
+  }
+  if (!Array.isArray(o.cards)) {
+    return { ok: false, error: 'This file is missing a "cards" array.' }
+  }
+
+  const manuscriptTitle = typeof o.manuscriptTitle === 'string' ? o.manuscriptTitle : ''
+  const rawTw = Number(o.targetWordCount)
+  const targetWordCount = Number.isFinite(rawTw) ? Math.max(0, Math.floor(rawTw)) : 0
+  const rawScale = Number(o.cardScale)
+  const cardScale = Number.isFinite(rawScale) ? rawScale : 1
+  const th = o.theme
+  const theme = th === 'light' || th === 'dark' ? th : undefined
+
+  const data: PlotmapperSaveV1 = {
+    version: 1,
+    manuscriptTitle,
+    targetWordCount,
+    cardScale,
+    cards: o.cards as PlotmapperSaveV1['cards'],
+    floatingPills: Array.isArray(o.floatingPills) ? (o.floatingPills as PlotmapperSaveV1['floatingPills']) : [],
+    startedWithSuggestion: Boolean(o.startedWithSuggestion),
+    theme,
+  }
+  return { ok: true, data }
+}
+
 /** Strip effects that often break or blow up html2canvas in cloned DOM. */
 function stripHeavyEffectsOnClone(_document: Document, clonedRoot: HTMLElement): void {
   const all = clonedRoot.querySelectorAll<HTMLElement>('*')

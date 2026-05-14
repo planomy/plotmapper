@@ -193,6 +193,16 @@ type PlotStore = {
   removeFloatingPill: (id: string) => void
   setFloatingPillDragResult: (id: string, args: { attachedToCardId: string | null; xPct: number; yPct: number }) => void
   cycleFloatingPillColor: (id: string) => void
+  /** Replace board state from a v1 JSON save (cards are normalized; orphan pills detached). */
+  restoreFromSave: (data: {
+    manuscriptTitle: string
+    targetWordCount: number
+    cardScale: number
+    cards: unknown
+    floatingPills?: unknown
+    startedWithSuggestion: boolean
+    theme?: 'light' | 'dark'
+  }) => void
 }
 
 let idCounter = 0
@@ -378,6 +388,33 @@ export const usePlotStore = create<PlotStore>()(
             return { ...p, colorId: next }
           }),
         }))
+      },
+
+      restoreFromSave: (data) => {
+        const cards = migrateOrNormalizeCards(data.cards)
+        const idSet = new Set(cards.map((c) => c.id))
+        let floatingPills = migrateFloatingPills(data.floatingPills ?? [])
+        floatingPills = floatingPills.map((fp) => ({
+          ...fp,
+          attachedToCardId:
+            fp.attachedToCardId && idSet.has(fp.attachedToCardId) ? fp.attachedToCardId : null,
+        }))
+        const tw = Math.max(0, Math.floor(Number(data.targetWordCount) || 0))
+        const rawScale = Number(data.cardScale)
+        const cardScale = Number.isFinite(rawScale)
+          ? Math.min(CARD_SCALE_MAX, Math.max(CARD_SCALE_MIN, rawScale))
+          : get().cardScale
+        const th = data.theme
+        const theme = th === 'light' || th === 'dark' ? th : get().theme
+        set({
+          manuscriptTitle: typeof data.manuscriptTitle === 'string' ? data.manuscriptTitle : '',
+          targetWordCount: tw,
+          cardScale,
+          theme,
+          cards,
+          floatingPills,
+          startedWithSuggestion: Boolean(data.startedWithSuggestion),
+        })
       },
     }),
     {

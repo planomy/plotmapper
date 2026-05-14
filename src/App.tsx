@@ -3,6 +3,8 @@ import { ActRowsBoard } from './components/ActRowsBoard'
 import { CastMatrix } from './components/CastMatrix'
 import {
   exportElementToPdfLandscape,
+  parsePlotmapperSaveV1,
+  pickProjectJsonFile,
   saveProjectJson,
   suggestedJsonFilename,
   type PlotmapperSaveV1,
@@ -17,6 +19,7 @@ function HeaderBar({ exportRef }: { exportRef: RefObject<HTMLDivElement | null> 
   const targetWordCount = usePlotStore((s) => s.targetWordCount)
   const cardScale = usePlotStore((s) => s.cardScale ?? 1)
   const cards = usePlotStore((s) => s.cards)
+  const floatingPills = usePlotStore((s) => s.floatingPills)
   const theme = usePlotStore((s) => s.theme)
   const setManuscriptTitle = usePlotStore((s) => s.setManuscriptTitle)
   const setTargetWordCount = usePlotStore((s) => s.setTargetWordCount)
@@ -25,6 +28,7 @@ function HeaderBar({ exportRef }: { exportRef: RefObject<HTMLDivElement | null> 
   const loadSuggestedStructure = usePlotStore((s) => s.loadSuggestedStructure)
   const clearBoard = usePlotStore((s) => s.clearBoard)
   const addFirstCard = usePlotStore((s) => s.addFirstCard)
+  const restoreFromSave = usePlotStore((s) => s.restoreFromSave)
 
   const pct = Math.round(cardScale * 100)
 
@@ -48,6 +52,28 @@ function HeaderBar({ exportRef }: { exportRef: RefObject<HTMLDivElement | null> 
     }
     const json = JSON.stringify(payload, null, 2)
     await saveProjectJson(json, suggestedJsonFilename(st.manuscriptTitle))
+  }
+
+  const handleLoad = async () => {
+    const hasContent =
+      cards.length > 0 || floatingPills.length > 0 || manuscriptTitle.trim().length > 0
+    if (hasContent && !confirm('Replace the current project with the file you choose?')) return
+    const file = await pickProjectJsonFile()
+    if (!file) return
+    let text: string
+    try {
+      text = await file.text()
+    } catch (e) {
+      console.error(e)
+      window.alert('Could not read that file.')
+      return
+    }
+    const parsed = parsePlotmapperSaveV1(text)
+    if (!parsed.ok) {
+      window.alert(parsed.error)
+      return
+    }
+    restoreFromSave(parsed.data)
   }
 
   const handleExport = async () => {
@@ -161,6 +187,9 @@ function HeaderBar({ exportRef }: { exportRef: RefObject<HTMLDivElement | null> 
           </button>
           <button type="button" className={btnGhost} onClick={() => void handleSave()}>
             Save
+          </button>
+          <button type="button" className={btnGhost} onClick={() => void handleLoad()}>
+            Load
           </button>
           <button type="button" className={btnGhost} onClick={() => void handleExport()}>
             Export PDF
