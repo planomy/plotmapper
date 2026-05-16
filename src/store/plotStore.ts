@@ -18,6 +18,8 @@ export type PlotCard = {
   slotIndex: number
   notes: string
   characters: string
+  /** Draft word count for this beat (user-entered). */
+  actualWordCount: number
 }
 
 export const PILL_COLOR_IDS = ['sky', 'amber', 'rose', 'violet', 'emerald', 'zinc'] as const
@@ -51,6 +53,11 @@ function firstEmptyCell(cards: PlotCard[]): { slotRow: SlotRow; slotIndex: numbe
   return null
 }
 
+function normalizeActualWordCount(raw: unknown): number {
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
+}
+
 function normalizeCard(c: Record<string, unknown>): PlotCard | null {
   if (!c || typeof c.id !== 'string') return null
   if (typeof c.slotRow === 'number' && typeof c.slotIndex === 'number') {
@@ -62,6 +69,7 @@ function normalizeCard(c: Record<string, unknown>): PlotCard | null {
       slotIndex: clampSlotIndex(c.slotIndex),
       notes: typeof c.notes === 'string' ? c.notes : '',
       characters: typeof c.characters === 'string' ? c.characters : '',
+      actualWordCount: normalizeActualWordCount(c.actualWordCount),
     }
   }
   return null
@@ -114,6 +122,7 @@ function migrateLegacyStemCards(raw: unknown[]): PlotCard[] {
       slotIndex: i,
       notes: typeof c.notes === 'string' ? c.notes : '',
       characters: typeof c.characters === 'string' ? c.characters : '',
+      actualWordCount: 0,
     })
   }
   return out
@@ -255,6 +264,7 @@ export const usePlotStore = create<PlotStore>()(
           slotIndex: row.slotIndex,
           notes: '',
           characters: '',
+          actualWordCount: 0,
         }))
         set({
           cards,
@@ -283,6 +293,7 @@ export const usePlotStore = create<PlotStore>()(
           slotIndex: si,
           notes: '',
           characters: '',
+          actualWordCount: 0,
         })
         set({ cards })
       },

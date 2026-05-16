@@ -110,7 +110,7 @@ function HeaderBar({ exportRef }: { exportRef: RefObject<HTMLDivElement | null> 
               htmlFor="ms-words"
               className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-500"
             >
-              Words
+              Target
             </label>
             <input
               id="ms-words"

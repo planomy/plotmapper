@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { CHAPTER_LABELS, MAJOR_LABELS } from '../lib/constants'
-import { milestoneWordsByCardId } from '../lib/beatMilestones'
 import { findPillSnapCardId } from '../lib/pillSnap'
 import { actFromSlotRow, GRID_ROWS, SLOTS_PER_ROW, type SlotRow } from '../lib/gridLayout'
 import type { FloatingPill, PillColorId, PlotCard } from '../store/plotStore'
@@ -68,6 +67,14 @@ const LABEL_OPTIONS: readonly string[] = [
 
 function actForRow(slotRow: SlotRow): 1 | 2 | 3 {
   return actFromSlotRow(slotRow)
+}
+
+function sumActualWordsByAct(cards: PlotCard[]): Record<1 | 2 | 3, number> {
+  const out: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 }
+  for (const c of cards) {
+    out[actFromSlotRow(c.slotRow)] += Math.max(0, Math.floor(c.actualWordCount))
+  }
+  return out
 }
 
 type DragSession = {
@@ -171,19 +178,16 @@ function AttachedPillsRow({
 
 function GridCard({
   card,
-  milestoneWords,
   dragPillId,
   beginDrag,
 }: {
   card: PlotCard
-  milestoneWords: number
   dragPillId: string | null
   beginDrag: (pill: FloatingPill, el: HTMLElement, e: ReactPointerEvent<HTMLSpanElement>) => void
 }) {
   const updateCard = usePlotStore((s) => s.updateCard)
   const removeCard = usePlotStore((s) => s.removeCard)
   const cardScale = usePlotStore((s) => s.cardScale ?? 1)
-  const targetWordCount = usePlotStore((s) => s.targetWordCount)
   const act = actFromSlotRow(card.slotRow)
   const colors = ACT_COLORS[act]
   const rem = 0.6875 * cardScale
@@ -235,16 +239,26 @@ function GridCard({
           onPointerDown={(e) => e.stopPropagation()}
         />
         <div className="mt-1 flex items-center gap-1 border-t border-slate-100 pt-1 dark:border-white/5">
-          <span className="shrink-0 text-[0.65em] uppercase tracking-wide text-slate-500 dark:text-slate-500">By</span>
+          <span className="shrink-0 text-[0.65em] uppercase tracking-wide text-slate-500 dark:text-slate-500">
+            Words
+          </span>
           <input
-            readOnly
-            tabIndex={-1}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
             draggable={false}
-            className="min-w-0 flex-1 cursor-default rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-right font-mono text-[0.85em] text-slate-800 tabular-nums outline-none dark:border-white/8 dark:bg-black/20 dark:text-slate-300"
-            value={targetWordCount > 0 ? milestoneWords.toLocaleString() : '—'}
-            title="Approximate cumulative draft length: Act One Climax ≈ 25%, Act Two Climax ≈ 75%, End ≈ 100%; other beats interpolate by reading order"
+            className="min-w-0 flex-1 cursor-text rounded border border-slate-200 bg-white px-1 py-0.5 text-right font-mono text-[0.85em] text-slate-800 tabular-nums outline-none focus:border-sky-500/50 dark:border-white/10 dark:bg-black/25 dark:text-slate-200 dark:focus:border-sky-500/40"
+            placeholder="0"
+            aria-label="Word count for this beat"
+            title="Draft word count for this beat"
+            value={card.actualWordCount === 0 ? '' : String(card.actualWordCount)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '').slice(0, 7)
+              const n = digits === '' ? 0 : Math.min(9_999_999, parseInt(digits, 10))
+              updateCard(card.id, { actualWordCount: Number.isFinite(n) ? n : 0 })
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
           />
-          <span className="shrink-0 text-[0.65em] text-slate-500 dark:text-slate-500">w</span>
         </div>
         <input
           draggable={false}
@@ -325,14 +339,12 @@ function SlotCell({
   slotRow,
   slotIndex,
   card,
-  milestoneWords,
   dragPillId,
   beginDrag,
 }: {
   slotRow: SlotRow
   slotIndex: number
   card: PlotCard | undefined
-  milestoneWords?: number
   dragPillId: string | null
   beginDrag: (pill: FloatingPill, el: HTMLElement, e: ReactPointerEvent<HTMLSpanElement>) => void
 }) {
@@ -354,12 +366,7 @@ function SlotCell({
       }}
     >
       {card ? (
-        <GridCard
-          card={card}
-          milestoneWords={milestoneWords ?? 0}
-          dragPillId={dragPillId}
-          beginDrag={beginDrag}
-        />
+        <GridCard card={card} dragPillId={dragPillId} beginDrag={beginDrag} />
       ) : (
         <EmptySlotPopover slotRow={slotRow} slotIndex={slotIndex} />
       )}
@@ -375,7 +382,6 @@ export function ActRowsBoard() {
   const cards = usePlotStore((s) => s.cards)
   const floatingPills = usePlotStore((s) => s.floatingPills)
   const addFloatingPill = usePlotStore((s) => s.addFloatingPill)
-  const targetWordCount = usePlotStore((s) => s.targetWordCount)
 
   const beginDrag = useCallback((pill: FloatingPill, el: HTMLElement, e: ReactPointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0) return
@@ -434,10 +440,8 @@ export function ActRowsBoard() {
     }
   }, [])
 
-  const milestoneById = useMemo(
-    () => milestoneWordsByCardId(targetWordCount, cards),
-    [targetWordCount, cards],
-  )
+  const wordsByAct = useMemo(() => sumActualWordsByAct(cards), [cards])
+
   const bySlot = useMemo(() => {
     const m = new Map<string, PlotCard>()
     for (const c of cards) {
@@ -488,7 +492,12 @@ export function ActRowsBoard() {
               <h2 className="font-display text-sm font-semibold leading-none text-slate-900 dark:text-white">
                 {meta.title}
               </h2>
-              <span className="text-[10px] leading-none text-slate-500 dark:text-slate-500">{meta.detail}</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-none text-slate-500 dark:text-slate-500">
+                <span className="font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                  Total {wordsByAct[act].toLocaleString()} w
+                </span>
+                <span>{meta.detail}</span>
+              </div>
             </div>
             <div className="overflow-x-auto pb-1">
               <div
@@ -503,7 +512,6 @@ export function ActRowsBoard() {
                       slotRow={slotRow}
                       slotIndex={slotIndex}
                       card={card}
-                      milestoneWords={card ? milestoneById.get(card.id) : undefined}
                       dragPillId={dragPillId}
                       beginDrag={beginDrag}
                     />
